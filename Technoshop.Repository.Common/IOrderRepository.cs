@@ -15,6 +15,6 @@ namespace Technoshop.Repository.Common
         Task<Order> GetOrderById(Guid id);
         Task<bool> DeleteOrderAsync(Guid id);
         Task<bool> UpdateOrderAsync(Guid id, Order order);
-        Task<bool> CreateOrderAsync(Order order);   
+        Task<Order> CreateOrderAsync(Order order);   
     }
 }

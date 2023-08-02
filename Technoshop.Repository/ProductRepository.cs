@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Technoshop.Common;
 using Technoshop.Model;
@@ -19,10 +20,12 @@ namespace Technoshop.Repository
     {
 
         private readonly IConnectionStringProvider _connectionProvider;
+        private readonly ILogger _logger;
 
-        public ProductRepository(IConnectionStringProvider connectionProvider)
+        public ProductRepository(IConnectionStringProvider connectionProvider, ILogger logger)
         {
             _connectionProvider = connectionProvider;
+            _logger = logger;
         }
 
 
@@ -390,60 +393,122 @@ namespace Technoshop.Repository
         } /*End DeleteProductAsync ----------------------------------*/
 
 
-        public async Task<PagedList<Order>> GetProductsByOrderIdAsync(PagedList<Order> orders)
+
+
+        public async Task<Dictionary<Guid, List<Product>>> GetProductsByOrderIdAsync(List<Guid> orderIds)
         {
-            //mapiram guide za dictionary kako bi bili key, value æe biti liste proizvoda pa æu te liste dodijeliti narudzbi gdje je taj orderId
-            //kako ne bih imao mnogo selectova na bazu ili iterirao kroz proizvode kako bih dodijeljivao prema orderIDu
             NpgsqlConnection connection = new NpgsqlConnection(_connectionProvider.GetConnectionString());
             connection.Open();
-            using (connection)
+            try
             {
-                List<Guid> orderIds = orders.Results.Select(order => order.Id).Distinct().ToList();
-                Dictionary<Guid, List<Product>> productsByOrderDictionary = new Dictionary<Guid, List<Product>>();
-
-                NpgsqlCommand cmd = new NpgsqlCommand("SELECT p.\"Id\", p.\"Name\", p.\"Price\", po_group.\"ProductQuantity\", po_group.\"OrderId\" " +
-                                                      "FROM \"Product\" p " +
-                                                      "INNER JOIN( " +
-                                                      "SELECT \"OrderId\", \"ProductId\", \"ProductQty\" AS \"ProductQuantity\" " +
-                                                      "FROM \"ProductOrder\" " +
-                                                      "WHERE \"OrderId\" = ANY(@orderIds) " +
-                                                      "GROUP BY \"OrderId\", \"ProductId\", \"ProductQty\" " +
-                                                      ") po_group ON p.\"Id\" = po_group.\"ProductId\" WHERE p.\"IsActive\" = true", connection);
-                cmd.Parameters.AddWithValue("orderIds", orderIds);
-                cmd.Connection = connection;
-
-                NpgsqlDataReader reader = await cmd.ExecuteReaderAsync();
-                if (reader.HasRows)
+                using (connection)
                 {
-                    while (reader.Read())
-                    {
-                        Guid orderId = (Guid)reader["OrderId"];
+                    NpgsqlCommand cmd = new NpgsqlCommand("SELECT o.\"Id\" as \"OrderId\", p.\"Id\", p.\"Name\", p.\"Price\", po.\"ProductQty\" AS \"Quantity\" " +
+                                                          "FROM \"Product\" p " +
+                                                          "INNER JOIN \"ProductOrder\" po ON p.\"Id\" = po.\"ProductId\" " +
+                                                          "INNER JOIN \"Order\" o ON o.\"Id\" = po.\"OrderId\" " +
+                                                          "WHERE o.\"Id\" = ANY(@orderIds) AND p.\"IsActive\" = true", connection);
 
-                        if (!productsByOrderDictionary.ContainsKey(orderId))
+                    cmd.Parameters.AddWithValue("orderIds", orderIds);
+
+                    NpgsqlDataReader reader = await cmd.ExecuteReaderAsync();
+                    var productsByOrder = new Dictionary<Guid, List<Product>>();
+
+                    if (reader.HasRows)
+                    {
+                        while (reader.Read())
                         {
-                            productsByOrderDictionary[orderId] = new List<Product>();
+                            Guid orderId = (Guid)reader["OrderId"];
+
+                            if (!productsByOrder.ContainsKey(orderId))
+                            {
+                                productsByOrder[orderId] = new List<Product>();
+                            }
+
+                            Product product = new Product();
+                            product.Id = (Guid)reader["Id"];
+                            product.Name = (string)reader["Name"];
+                            product.Price = (decimal)reader["Price"];
+                            product.Quantity = (int)reader["Quantity"];
+
+                            productsByOrder[orderId].Add(product);
                         }
-
-                        Product product = new Product();
-                        product.Id = (Guid)reader["Id"];
-                        product.Name = (string)reader["Name"];
-                        product.Price = (decimal)reader["Price"];
-                        product.Quantity = (int)reader["ProductQuantity"];
-                        productsByOrderDictionary[orderId].Add(product);
                     }
-                }
-                reader.Close();
 
-                foreach (var order in orders.Results)
-                {
-                    if (productsByOrderDictionary.TryGetValue(order.Id, out List<Product> products))
-                    {
-                        order.Products = products;
-                    }
+                    reader.Close();
+                    return productsByOrder;
                 }
-                return orders;
+            }
+            catch (NpgsqlException ex)
+            {
+                _logger.LogError(ex.Message, $"Retrieving associated products encountered an error at the data source: \n {ex}");
+                return null;
+            }
+            catch(Exception exp)
+            {
+                _logger.LogError(exp.Message, $"Something went wrong: \n {exp}");
+                return null;
             }
         }
+
+
+
+
+
+        //public async Task<PagedList<Order>> GetProductsByOrderIdAsync(PagedList<Order> orders)
+        //{
+        //    //mapiram guide za dictionary kako bi bili key, value æe biti liste proizvoda pa æu te liste dodijeliti narudzbi gdje je taj orderId
+        //    //kako ne bih imao mnogo selectova na bazu ili iterirao kroz proizvode kako bih dodijeljivao prema orderIDu
+        //    NpgsqlConnection connection = new NpgsqlConnection(_connectionProvider.GetConnectionString());
+        //    connection.Open();
+        //    using (connection)
+        //    {
+        //        List<Guid> orderIds = orders.Results.Select(order => order.Id).Distinct().ToList();
+        //        Dictionary<Guid, List<Product>> productsByOrderDictionary = new Dictionary<Guid, List<Product>>();
+
+        //        NpgsqlCommand cmd = new NpgsqlCommand("SELECT p.\"Id\", p.\"Name\", p.\"Price\", po_group.\"ProductQuantity\", po_group.\"OrderId\" " +
+        //                                              "FROM \"Product\" p " +
+        //                                              "INNER JOIN( " +
+        //                                              "SELECT \"OrderId\", \"ProductId\", \"ProductQty\" AS \"ProductQuantity\" " +
+        //                                              "FROM \"ProductOrder\" " +
+        //                                              "WHERE \"OrderId\" = ANY(@orderIds) " +
+        //                                              "GROUP BY \"OrderId\", \"ProductId\", \"ProductQty\" " +
+        //                                              ") po_group ON p.\"Id\" = po_group.\"ProductId\" WHERE p.\"IsActive\" = true", connection);
+        //        cmd.Parameters.AddWithValue("orderIds", orderIds);
+        //        cmd.Connection = connection;
+
+        //        NpgsqlDataReader reader = await cmd.ExecuteReaderAsync();
+        //        if (reader.HasRows)
+        //        {
+        //            while (reader.Read())
+        //            {
+        //                Guid orderId = (Guid)reader["OrderId"];
+
+        //                if (!productsByOrderDictionary.ContainsKey(orderId))
+        //                {
+        //                    productsByOrderDictionary[orderId] = new List<Product>();
+        //                }
+
+        //                Product product = new Product();
+        //                product.Id = (Guid)reader["Id"];
+        //                product.Name = (string)reader["Name"];
+        //                product.Price = (decimal)reader["Price"];
+        //                product.Quantity = (int)reader["ProductQuantity"];
+        //                productsByOrderDictionary[orderId].Add(product);
+        //            }
+        //        }
+        //        reader.Close();
+
+        //        foreach (var order in orders.Results)
+        //        {
+        //            if (productsByOrderDictionary.TryGetValue(order.Id, out List<Product> products))
+        //            {
+        //                order.Products = products;
+        //            }
+        //        }
+        //        return orders;
+        //    }
+        //}
 
 
 

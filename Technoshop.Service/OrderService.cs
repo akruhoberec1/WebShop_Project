@@ -44,13 +44,24 @@ namespace Technoshop.Service
         {
             (OrderFilter checkedFilter, OrderSorting checkedSorting) = _orderValidationService.OrderParamsValidation(filtering, sorting);
 
-                PagedList<Order> orders = await _orderRepository.GetOrdersWithDataAsync(paginate, checkedFilter, checkedSorting);
-                if (orders != null)
+            PagedList<Order> orders = await _orderRepository.GetOrdersWithDataAsync(paginate, checkedFilter, checkedSorting);
+            if (orders != null)
+            {
+                List<Guid> orderIds = orders.Results.Select(order => order.Id).Distinct().ToList();
+
+                Dictionary<Guid, List<Product>> productsByOrder = await _productRepository.GetProductsByOrderIdAsync(orderIds);
+
+                foreach (var order in orders.Results)
                 {
-                    PagedList<Order> ordersWithProducts = await _productRepository.GetProductsByOrderIdAsync(orders);
-                    return ordersWithProducts;
+                    if (productsByOrder.TryGetValue(order.Id, out var products))
+                    {
+                        order.Products = products;
+                    }
                 }
-                return null;
+
+                return orders;
+            }
+            return null;
         }
 
         public async Task<Order> GetOrderByIdAsync(Guid id)
@@ -66,13 +77,10 @@ namespace Technoshop.Service
 
         public async Task<bool> UpdateOrderAsync(Guid id, Order order)
         {
-            if (_orderValidationService.CreateAndUpdateOrderValidation(order))
-            {
-                bool isUpdated = await _orderRepository.UpdateOrderAsync(id, order);
 
-                return (isUpdated == true) ? true : false;
-            }
-            return false;
+            bool isUpdated = await _orderRepository.UpdateOrderAsync(id, order);
+
+            return (isUpdated == true) ? true : false;
 
         }
 
@@ -85,15 +93,15 @@ namespace Technoshop.Service
 
         public async Task<Order> CreateOrderAsync(Order order)
         {
-            if (_orderValidationService.CreateAndUpdateOrderValidation(order))
+            
+            if (_orderValidationService.CreateOrderValidation(order))
             {
-                bool isCreated = await _orderRepository.CreateOrderAsync(order);
+                Order newOrder = await _orderRepository.CreateOrderAsync(order);
 
-                if (isCreated)
+                if (newOrder != null)
                 {
                     await _mailerService.SendMail(order);
 
-                    Order newOrder = await _orderRepository.GetOrderById(order.Id);
                     _pdfService.Create(newOrder);
 
                     return newOrder;

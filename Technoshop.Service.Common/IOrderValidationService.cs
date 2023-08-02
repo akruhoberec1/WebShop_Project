@@ -10,7 +10,7 @@ namespace Technoshop.Service.Common
 {
     public interface IOrderValidationService
     {
-        bool CreateAndUpdateOrderValidation(Order order);
+        bool CreateOrderValidation(Order order);
         (OrderFilter, OrderSorting) OrderParamsValidation(OrderFilter filter, OrderSorting sorting);
     }
 }

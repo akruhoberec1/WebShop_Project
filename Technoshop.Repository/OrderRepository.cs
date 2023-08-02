@@ -185,13 +185,13 @@ namespace Technoshop.Repository
             {
                 using (connection)
                 {
-                    NpgsqlCommand cmd = new NpgsqlCommand("select a.\"Id\", a.\"ShippingAddressId\", a.\"BillingAddressId\", a.\"PersonId\"," +
-                       " b.\"FirstName\", b.\"LastName\", b.\"Email\", sa.\"StreetName\" as \"ShippingStreetName\", " +
+                    NpgsqlCommand cmd = new NpgsqlCommand("select o.\"Id\", o.\"ShippingAddressId\", o.\"BillingAddressId\", o.\"PersonId\"," +
+                       " pe.\"FirstName\", pe.\"LastName\", pe.\"Email\", sa.\"StreetName\" as \"ShippingStreetName\", " +
                        "sa.\"StreetNumber\" as \"ShippingStreetNumber\", sa.\"City\" as \"ShippingCity\", sa.\"Zipcode\" as \"ShippingZipcode\", " +
                        "ba.\"StreetName\" as \"BillingStreetName\", ba.\"StreetNumber\" as \"BillingStreetNumber\", ba.\"City\" as \"BillingCity\", " +
-                       "ba.\"Zipcode\" as \"BillingZipcode\", p.\"Name\", p.\"Price\", po.\"ProductQty\" as \"ProductQuantity\" from \"Order\" a " +
-                       "inner join \"Person\" b on a.\"PersonId\" = b.\"Id\" inner join \"Address\" sa on sa.\"Id\" = a.\"ShippingAddressId\" inner join \"Address\" ba on ba.\"Id\" = " +
-                       "a.\"BillingAddressId\" inner join \"ProductOrder\" po on po.\"OrderId\" = a.\"Id\" inner join \"Product\" p ON po.\"ProductId\" = p.\"Id\" WHERE a.\"Id\" = @Id;", connection);
+                       "ba.\"Zipcode\" as \"BillingZipcode\", p.\"Id\", p.\"Name\", p.\"Price\", po.\"ProductQty\" as \"ProductQuantity\" from \"Order\" o " +
+                       "inner join \"Person\" pe on o.\"PersonId\" = pe.\"Id\" inner join \"Address\" sa on sa.\"Id\" = o.\"ShippingAddressId\" inner join \"Address\" ba on ba.\"Id\" = " +
+                       "o.\"BillingAddressId\" inner join \"ProductOrder\" po on po.\"OrderId\" = o.\"Id\" inner join \"Product\" p ON po.\"ProductId\" = p.\"Id\" WHERE o.\"Id\" = @Id AND po.\"IsActive\" = true;", connection);
 
                     Order order = new Order();
                     order.ShippingAddress = new Address();
@@ -211,10 +211,12 @@ namespace Technoshop.Repository
                         order.Person.Email = (string)reader["Email"];
                         order.Id = id;
                         order.PersonId = (Guid)reader["PersonId"];
+                        order.ShippingAddress.Id = (Guid)reader["ShippingAddressId"];
                         order.ShippingAddress.StreetName = (string)reader["ShippingStreetName"];
                         order.ShippingAddress.StreetNumber = (string)reader["ShippingStreetNumber"];
                         order.ShippingAddress.City = (string)reader["ShippingCity"];
                         order.ShippingAddress.ZipCode = (int)reader["ShippingZipcode"];
+                        order.BillingAddress.Id = (Guid)reader["BillingAddressId"];
                         order.BillingAddress.StreetName = (string)reader["BillingStreetName"];
                         order.BillingAddress.StreetNumber = (string)reader["BillingStreetNumber"];
                         order.BillingAddress.City = (string)reader["BillingCity"];
@@ -330,13 +332,13 @@ namespace Technoshop.Repository
                             command.Parameters.AddWithValue("@PersonId", updatedOrder.PersonId);
                         }
 
-                        if (updatedOrder.ShippingAddress != null && updatedOrder.ShippingAddress.Id != existingOrder.ShippingAddress.Id)
+                        if (updatedOrder.ShippingAddress != null && updatedOrder.ShippingAddress.Id != existingOrder.ShippingAddress.Id && updatedOrder.ShippingAddress.Id != Guid.Empty)
                         {
                             queryBuilder.Append(" \"ShippingAddressId\" = @ShippingAddressId,");
                             command.Parameters.AddWithValue("@ShippingAddressId", updatedOrder.ShippingAddress.Id);
                         }
 
-                        if (updatedOrder.BillingAddress != null && updatedOrder.BillingAddress.Id != existingOrder.BillingAddress.Id)
+                        if (updatedOrder.BillingAddress != null && updatedOrder.BillingAddress.Id != existingOrder.BillingAddress.Id && updatedOrder.BillingAddress.Id != Guid.Empty)
                         {
                             queryBuilder.Append(" \"BillingAddressId\" = @BillingAddressId,");
                             command.Parameters.AddWithValue("@BillingAddressId", updatedOrder.BillingAddress.Id);
@@ -430,11 +432,12 @@ namespace Technoshop.Repository
             {
                 NpgsqlCommand command = new NpgsqlCommand("", connection);
                 Guid id = Guid.NewGuid();
-                command.CommandText = "INSERT INTO \"ProductOrder\" (\"Id\",\"OrderId\", \"ProductId\", \"ProductQty\") VALUES (@Id,@OrderId, @ProductId, @ProductQuantity)";
+                command.CommandText = "INSERT INTO \"ProductOrder\" (\"Id\",\"OrderId\", \"ProductId\", \"ProductQty\", \"IsActive\") VALUES (@Id,@OrderId, @ProductId, @ProductQuantity, @IsActive)";
                 command.Parameters.AddWithValue("@Id", id);
                 command.Parameters.AddWithValue("@OrderId", orderId);
                 command.Parameters.AddWithValue("@ProductId", product.Id);
                 command.Parameters.AddWithValue("@ProductQuantity", product.Quantity);
+                command.Parameters.AddWithValue("@IsActive", true);
 
                 int rowsAffected = await command.ExecuteNonQueryAsync();
 
@@ -445,20 +448,20 @@ namespace Technoshop.Repository
                 _logger.LogError(ex.Message, "Failed to add products to order");
                 return false;
             }
-
-
-
         }
 
 
-        public async Task<bool> CreateOrderAsync(Order order)
+        public async Task<Order> CreateOrderAsync(Order order)
         {
             NpgsqlConnection connection = new NpgsqlConnection(_connectionProvider.GetConnectionString());
-            
+
+            order.Id = Guid.NewGuid();
+
             using (connection) 
             {
                 connection.Open();
                 Guid userId = Guid.Empty;
+
                 foreach (var product in order.Products)
                 {
                     if (product.Price != null && product.Quantity != null)
@@ -472,6 +475,7 @@ namespace Technoshop.Repository
                 {
                     try
                     {
+
                         if (order.Person != null)
                         {
                             NpgsqlCommand cmdUserSelect = new NpgsqlCommand("Select u.\"Id\" from \"User\" u inner join \"Person\" p on u.\"PersonId\" = p.\"Id\" where p.\"Id\" = @Id", connection);
@@ -506,7 +510,7 @@ namespace Technoshop.Repository
 
                         if (order.Products != null)
                         {
-                            NpgsqlCommand cmdProductOrder = new NpgsqlCommand("Insert into \"ProductOrder\" (\"Id\", \"ProductId\", \"OrderId\", \"ProductQty\") VALUES (@Id, @ProductId, @OrderId, @ProductQuantity)", connection);
+                            NpgsqlCommand cmdProductOrder = new NpgsqlCommand("Insert into \"ProductOrder\" (\"Id\", \"ProductId\", \"OrderId\", \"ProductQty\", \"IsActive\") VALUES (@Id, @ProductId, @OrderId, @ProductQuantity, @IsActive)", connection);
 
                             foreach (var product in order.Products)
                             {
@@ -517,13 +521,15 @@ namespace Technoshop.Repository
                                 cmdProductOrder.Parameters.AddWithValue("@ProductId", product.Id);
                                 cmdProductOrder.Parameters.AddWithValue("@OrderId", order.Id);
                                 cmdProductOrder.Parameters.AddWithValue("@ProductQuantity", product.Quantity);
+                                cmdProductOrder.Parameters.AddWithValue("@IsActive", true);
 
                                 await cmdProductOrder.ExecuteNonQueryAsync();
                             }
                         }
 
                         transaction.Commit();
-                        return true;
+                        Order orderToReturn = await GetOrderById(order.Id);
+                        return orderToReturn;
                     }
                     catch (NpgsqlException ex)
                     {
@@ -535,7 +541,7 @@ namespace Technoshop.Repository
                         transaction.Rollback();
                         _logger.LogError(exp.Message, "Something went wrong, please try again.");
                     }
-                    return false;
+                    return null;
                 }
             }
         }

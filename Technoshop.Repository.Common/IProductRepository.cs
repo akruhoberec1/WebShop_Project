@@ -21,7 +21,7 @@ namespace Technoshop.Repository.Common
         Task<bool> UpdateProductAsync(Guid id, Product product);
 
         Task<bool> DeleteProductAsync(Guid id);
-        Task<PagedList<Order>> GetProductsByOrderIdAsync(PagedList<Order> orders);
+        Task<Dictionary<Guid, List<Product>>> GetProductsByOrderIdAsync(List<Guid> orderIds);
         Task<List<Product>> GetSimpleProductsAsync();
     }
 }

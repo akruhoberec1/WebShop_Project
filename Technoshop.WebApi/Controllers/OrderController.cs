@@ -230,6 +230,7 @@ namespace Technoshop.WebApi.Controllers
                     },
                     ShippingAddress = new OrderAddressRest()
                     {
+                        Id = order.ShippingAddress.Id,
                         StreetName = order.ShippingAddress.StreetName,
                         StreetNumber = order.ShippingAddress.StreetNumber,
                         City = order.ShippingAddress.City,
@@ -237,6 +238,7 @@ namespace Technoshop.WebApi.Controllers
                     },
                     BillingAddress = new OrderAddressRest()
                     {
+                        Id = order.BillingAddress.Id,
                         StreetName = order.BillingAddress.StreetName,
                         StreetNumber = order.ShippingAddress.StreetNumber,
                         City = order.BillingAddress.City,
@@ -246,6 +248,7 @@ namespace Technoshop.WebApi.Controllers
                     CreatedAt = order.CreatedAt,
                     ProductsRest = order.Products.Select(product => new ProductsTableListRest
                     {
+                       Id = product.Id,
                        Name = product.Name,
                        Price = product.Price,
                        Quantity = product.Quantity

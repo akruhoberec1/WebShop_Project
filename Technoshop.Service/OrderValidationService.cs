@@ -12,10 +12,8 @@ namespace Technoshop.Service
 {
     public class OrderValidationService : IOrderValidationService
     {
-        public bool CreateAndUpdateOrderValidation(Order order)
+        public bool CreateOrderValidation(Order order)
         {
-            if (order.Person.Id == Guid.Empty)
-                return false;
 
             if (order.ShippingAddress.Id == Guid.Empty)
                 return false;
