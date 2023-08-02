@@ -27,8 +27,9 @@ namespace Technoshop.Service
         private readonly IProductRepository _productRepository;
         private readonly IPaginateService _paginateService;
         private readonly IConnectionService _connectionService;
-        private readonly IPdfService _pdfService;    
-        public OrderService(IOrderRepository orderRepository, IMailerService mailerService, IProductRepository productRepository, IPaginateService paginateService, IConnectionService connectionService, IPdfService pdfService)
+        private readonly IPdfService _pdfService;
+        private readonly IOrderValidationService _orderValidationService;
+        public OrderService(IOrderRepository orderRepository, IMailerService mailerService, IProductRepository productRepository, IPaginateService paginateService, IConnectionService connectionService, IPdfService pdfService, IOrderValidationService orderValidationService)
         {
             _orderRepository = orderRepository;
             _productRepository = productRepository;
@@ -36,19 +37,20 @@ namespace Technoshop.Service
             _paginateService = paginateService;
             _connectionService = connectionService;
             _pdfService = pdfService;
+            _orderValidationService = orderValidationService;
         }
 
         public async Task<PagedList<Order>> GetOrdersAsync(Paginate paginate, OrderFilter filtering, OrderSorting sorting)
         {
+            (OrderFilter checkedFilter, OrderSorting checkedSorting) = _orderValidationService.OrderParamsValidation(filtering, sorting);
 
-            PagedList<Order> orders = await _orderRepository.GetOrdersWithDataAsync(paginate, filtering, sorting);
-            if (orders != null)
-            {
-                PagedList<Order> ordersWithProducts = await _productRepository.GetProductsByOrderIdAsync(orders);
-                return ordersWithProducts;
-            }
-            return null;
-
+                PagedList<Order> orders = await _orderRepository.GetOrdersWithDataAsync(paginate, checkedFilter, checkedSorting);
+                if (orders != null)
+                {
+                    PagedList<Order> ordersWithProducts = await _productRepository.GetProductsByOrderIdAsync(orders);
+                    return ordersWithProducts;
+                }
+                return null;
         }
 
         public async Task<Order> GetOrderByIdAsync(Guid id)
@@ -64,9 +66,14 @@ namespace Technoshop.Service
 
         public async Task<bool> UpdateOrderAsync(Guid id, Order order)
         {
-            bool isUpdated = await _orderRepository.UpdateOrderAsync(id, order);
+            if (_orderValidationService.CreateAndUpdateOrderValidation(order))
+            {
+                bool isUpdated = await _orderRepository.UpdateOrderAsync(id, order);
 
-            return (isUpdated == true) ? true : false;   
+                return (isUpdated == true) ? true : false;
+            }
+            return false;
+
         }
 
         public async Task<bool> DeleteOrderAsync(Guid id)
@@ -78,19 +85,26 @@ namespace Technoshop.Service
 
         public async Task<Order> CreateOrderAsync(Order order)
         {
-            bool isCreated = await _orderRepository.CreateOrderAsync(order);
-
-            if (isCreated)
+            if (_orderValidationService.CreateAndUpdateOrderValidation(order))
             {
-                await _mailerService.SendMail(order);
+                bool isCreated = await _orderRepository.CreateOrderAsync(order);
 
-                Order newOrder = await _orderRepository.GetOrderById(order.Id);
-                _pdfService.Create(newOrder);
+                if (isCreated)
+                {
+                    await _mailerService.SendMail(order);
 
-                return newOrder;
+                    Order newOrder = await _orderRepository.GetOrderById(order.Id);
+                    _pdfService.Create(newOrder);
+
+                    return newOrder;
+                }
+                return null;
             }
             return null;
+            
         }
+
+        
 
 
 

@@ -64,7 +64,6 @@ namespace Technoshop.WebApi.Controllers
         }
 
 
-
         /*
          * GET BY ID METHOD
          */
@@ -87,7 +86,6 @@ namespace Technoshop.WebApi.Controllers
             return Request.CreateResponse(HttpStatusCode.OK, MapOrderToRest(order));
 
         }
-
 
 
         /******

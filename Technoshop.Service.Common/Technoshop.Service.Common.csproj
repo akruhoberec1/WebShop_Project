@@ -166,6 +166,7 @@
     <Compile Include="IConnectionService.cs" />
     <Compile Include="IMailerService.cs" />
     <Compile Include="IOrderService.cs" />
+    <Compile Include="IOrderValidationService.cs" />
     <Compile Include="IPaginateService.cs" />
     <Compile Include="IPdfService.cs" />
     <Compile Include="IPersonService.cs" />

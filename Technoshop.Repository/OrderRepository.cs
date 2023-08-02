@@ -171,8 +171,6 @@ namespace Technoshop.Repository
                 _logger.LogError(exp.Message, $"Couldn't retrieve the orders:\n {exp}");
                 return null;
             }
-
-
         }
 
 
@@ -246,18 +244,16 @@ namespace Technoshop.Repository
                     return null;
                 }
             }
-            catch(NpgsqlException ex)
+            catch (NpgsqlException ex)
             {
                 _logger.LogError(ex.Message, "Getting the order encountered an error at the source");
                 return null;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 _logger.LogError(ex.Message, "Couldn't fetch the order");
                 return null;
-            }
-  
-            
+            } 
         }
 
 

@@ -37,6 +37,7 @@ namespace Technoshop.WebApi.App_Start
             //ORDERS
             builder.RegisterType<OrderRepository>().As<IOrderRepository>().InstancePerRequest();
             builder.RegisterType<OrderService>().As<IOrderService>().InstancePerRequest();
+            builder.RegisterType<OrderValidationService>().As<IOrderValidationService>().InstancePerDependency();
 
             //PRODUCTS
             builder.RegisterType<ProductRepository>().As<IProductRepository>().InstancePerRequest();
