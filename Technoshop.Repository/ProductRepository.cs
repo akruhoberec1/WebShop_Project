@@ -441,7 +441,6 @@ namespace Technoshop.Repository
                         order.Products = products;
                     }
                 }
-
                 return orders;
             }
         }
