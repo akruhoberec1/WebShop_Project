@@ -12,6 +12,8 @@ using EllipticCurve.Utils;
 using System.Data.SqlClient;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using System.Security.Claims;
+using System.Web;
 
 namespace Technoshop.Repository
 {
@@ -454,13 +456,12 @@ namespace Technoshop.Repository
         public async Task<Order> CreateOrderAsync(Order order)
         {
             NpgsqlConnection connection = new NpgsqlConnection(_connectionProvider.GetConnectionString());
-
+            Guid userId = Guid.Empty;
             order.Id = Guid.NewGuid();
 
             using (connection) 
             {
                 connection.Open();
-                Guid userId = Guid.Empty;
 
                 foreach (var product in order.Products)
                 {
@@ -476,16 +477,24 @@ namespace Technoshop.Repository
                     try
                     {
 
-                        if (order.Person != null)
-                        {
-                            NpgsqlCommand cmdUserSelect = new NpgsqlCommand("Select u.\"Id\" from \"User\" u inner join \"Person\" p on u.\"PersonId\" = p.\"Id\" where p.\"Id\" = @Id", connection);
-                            cmdUserSelect.Parameters.AddWithValue("@Id", order.Person.Id);
+                        ClaimsIdentity identity = (ClaimsIdentity)HttpContext.Current.User.Identity;
 
-                            var userReader = await cmdUserSelect.ExecuteReaderAsync();
-                            userReader.Read();
-                            userId = (Guid)userReader["Id"];
-                            userReader.Close();
+                        Claim userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+
+                        if (userIdClaim != null)
+                        {
+                            userId = new Guid(userIdClaim.Value);
                         }
+                        //if (order.Person != null)
+                        //{
+                        //    NpgsqlCommand cmdUserSelect = new NpgsqlCommand("Select u.\"Id\" from \"User\" u inner join \"Person\" p on u.\"PersonId\" = p.\"Id\" where p.\"Id\" = @Id", connection);
+                        //    cmdUserSelect.Parameters.AddWithValue("@Id", order.Person.Id);
+
+                        //    var userReader = await cmdUserSelect.ExecuteReaderAsync();
+                        //    userReader.Read();
+                        //    userId = (Guid)userReader["Id"];
+                        //    userReader.Close();
+                        //}
 
                         NpgsqlCommand cmdOrder = new NpgsqlCommand("Insert into \"Order\" (\"Id\",\"PersonId\",\"ShippingAddressId\",\"BillingAddressId\",\"TotalPrice\",\"CreatedAt\",\"UpdatedAt\",\"IsActive\",\"CreatedBy\",\"UpdatedBy\")" +
                             "VALUES (@Id,@PersonId,@ShippingAddressId,@BillingAddressId,@TotalPrice,@CreatedAt,@UpdatedAt,@IsActive,@CreatedBy,@UpdatedBy)", connection);
