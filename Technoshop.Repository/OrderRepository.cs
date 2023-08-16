@@ -5,12 +5,7 @@ using Technoshop.Model;
 using Technoshop.Repository.Common;
 using Npgsql;
 using System.Text;
-using Npgsql.Replication.PgOutput.Messages;
 using System.Collections.Generic;
-using System.Runtime.Remoting.Messaging;
-using EllipticCurve.Utils;
-using System.Data.SqlClient;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 using System.Web;
@@ -30,6 +25,7 @@ namespace Technoshop.Repository
             _connectionProvider = connectionProvider;
             _logger = logger;
         }
+
         /*
          * GET WITH FILTER
          */
@@ -60,8 +56,8 @@ namespace Technoshop.Repository
                        "INNER JOIN \"Address\" ba ON ba.\"Id\" = o.\"BillingAddressId\"");
 
 
-                    cmdBuilder.Append(" WHERE 1 = 1 AND o.\"IsActive\" = true");
-                    countBuilder.Append(" WHERE 1 = 1 AND o.\"IsActive\" = true");
+                    cmdBuilder.Append(" WHERE o.\"IsActive\" = true");
+                    countBuilder.Append(" WHERE o.\"IsActive\" = true");
                     if (!string.IsNullOrEmpty(filtering.SearchQuery))
                     {
                         cmdBuilder.Append(" AND (LOWER(pe.\"FirstName\") LIKE '%' || LOWER(@SearchQuery) || '%' OR LOWER(pe.\"LastName\") LIKE '%' || LOWER(@SearchQuery) || '%')");
@@ -193,7 +189,7 @@ namespace Technoshop.Repository
                        "ba.\"StreetName\" as \"BillingStreetName\", ba.\"StreetNumber\" as \"BillingStreetNumber\", ba.\"City\" as \"BillingCity\", " +
                        "ba.\"Zipcode\" as \"BillingZipcode\", p.\"Id\", p.\"Name\", p.\"Price\", po.\"ProductQty\" as \"ProductQuantity\" from \"Order\" o " +
                        "inner join \"Person\" pe on o.\"PersonId\" = pe.\"Id\" inner join \"Address\" sa on sa.\"Id\" = o.\"ShippingAddressId\" inner join \"Address\" ba on ba.\"Id\" = " +
-                       "o.\"BillingAddressId\" inner join \"ProductOrder\" po on po.\"OrderId\" = o.\"Id\" inner join \"Product\" p ON po.\"ProductId\" = p.\"Id\" WHERE o.\"Id\" = @Id AND po.\"IsActive\" = true;", connection);
+                       "o.\"BillingAddressId\" inner join \"ProductOrder\" po on po.\"OrderId\" = o.\"Id\" inner join \"Product\" p ON po.\"ProductId\" = p.\"Id\" WHERE o.\"Id\" = @Id AND o.\"IsActive\" = true AND po.\"IsActive\" = true;", connection);
 
                     Order order = new Order();
                     order.ShippingAddress = new Address();
@@ -257,7 +253,7 @@ namespace Technoshop.Repository
             {
                 _logger.LogError(ex.Message, "Couldn't fetch the order");
                 return null;
-            } 
+            }
         }
 
 
@@ -284,6 +280,9 @@ namespace Technoshop.Repository
                     cmdProductOrder.Transaction = transaction;
                     cmdProductOrder.Parameters.AddWithValue("@Id", id);
                     await cmdProductOrder.ExecuteNonQueryAsync();
+
+                    transaction.Commit();
+                    return true;
                 }
                 catch(NpgsqlException ex)
                 {
@@ -297,9 +296,12 @@ namespace Technoshop.Repository
                     _logger.LogError(ex.Message, "Could not delete the order");
                     return false;
                 }
+                finally
+                {
+                    transaction.Dispose();
+                    connection.Dispose();
+                }
 
-                transaction.Commit();
-                return true;
             }
         }
 
@@ -317,8 +319,6 @@ namespace Technoshop.Repository
             try
             {
                 Order existingOrder = await GetOrderById(id);
-
-
 
                 using (transaction)
                 {
@@ -347,7 +347,7 @@ namespace Technoshop.Repository
                         }
 
                         queryBuilder.Append(" \"UpdatedAt\" = @UpdatedAt,");
-                        command.Parameters.AddWithValue("@UpdatedAt", DateTime.Now);
+                        command.Parameters.AddWithValue("@UpdatedAt", DateTime.UtcNow);
 
                         queryBuilder.Remove(queryBuilder.Length - 1, 1);
 
@@ -387,6 +387,10 @@ namespace Technoshop.Repository
                 transaction.Rollback();
                 _logger.LogError(ex.Message, "Couldn't update an order");
                 return false;
+            }
+            finally
+            {
+                transaction.Dispose();
             }
         }
 
@@ -485,16 +489,6 @@ namespace Technoshop.Repository
                         {
                             userId = new Guid(userIdClaim.Value);
                         }
-                        //if (order.Person != null)
-                        //{
-                        //    NpgsqlCommand cmdUserSelect = new NpgsqlCommand("Select u.\"Id\" from \"User\" u inner join \"Person\" p on u.\"PersonId\" = p.\"Id\" where p.\"Id\" = @Id", connection);
-                        //    cmdUserSelect.Parameters.AddWithValue("@Id", order.Person.Id);
-
-                        //    var userReader = await cmdUserSelect.ExecuteReaderAsync();
-                        //    userReader.Read();
-                        //    userId = (Guid)userReader["Id"];
-                        //    userReader.Close();
-                        //}
 
                         NpgsqlCommand cmdOrder = new NpgsqlCommand("Insert into \"Order\" (\"Id\",\"PersonId\",\"ShippingAddressId\",\"BillingAddressId\",\"TotalPrice\",\"CreatedAt\",\"UpdatedAt\",\"IsActive\",\"CreatedBy\",\"UpdatedBy\")" +
                             "VALUES (@Id,@PersonId,@ShippingAddressId,@BillingAddressId,@TotalPrice,@CreatedAt,@UpdatedAt,@IsActive,@CreatedBy,@UpdatedBy)", connection);

@@ -29,13 +29,11 @@ namespace Technoshop.Service
         private readonly IConnectionService _connectionService;
         private readonly IPdfService _pdfService;
         private readonly IOrderValidationService _orderValidationService;
-        public OrderService(IOrderRepository orderRepository, IMailerService mailerService, IProductRepository productRepository, IPaginateService paginateService, IConnectionService connectionService, IPdfService pdfService, IOrderValidationService orderValidationService)
+        public OrderService(IOrderRepository orderRepository, IMailerService mailerService, IProductRepository productRepository, IPdfService pdfService, IOrderValidationService orderValidationService)
         {
             _orderRepository = orderRepository;
             _productRepository = productRepository;
             _mailerService = mailerService;
-            _paginateService = paginateService;
-            _connectionService = connectionService;
             _pdfService = pdfService;
             _orderValidationService = orderValidationService;
         }
@@ -47,7 +45,7 @@ namespace Technoshop.Service
             PagedList<Order> orders = await _orderRepository.GetOrdersWithDataAsync(paginate, checkedFilter, checkedSorting);
             if (orders != null)
             {
-                List<Guid> orderIds = orders.Results.Select(order => order.Id).Distinct().ToList();
+                List<Guid> orderIds = orders.Results.Select(order => order.Id).ToList();
 
                 Dictionary<Guid, List<Product>> productsByOrder = await _productRepository.GetProductsByOrderIdAsync(orderIds);
 
@@ -58,7 +56,6 @@ namespace Technoshop.Service
                         order.Products = products;
                     }
                 }
-
                 return orders;
             }
             return null;
@@ -70,8 +67,7 @@ namespace Technoshop.Service
                 if (order != null)
                 {
                     return order;
-                }
-                
+                }     
             return null;
         }
 

@@ -44,7 +44,6 @@ namespace Technoshop.Service
 
             return (filter, sorting);
 
-            //check searchQuery SQL injection
         }
 
 
