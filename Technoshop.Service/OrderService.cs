@@ -1,20 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Technoshop.Repository.Common;
 using Technoshop.Service.Common;
 using Technoshop.Model;
-using System.ComponentModel;
 using Technoshop.Common;
-using SendGrid.Helpers.Mail.Model;
-using SendGrid.Helpers.Mail;
-using PdfSharp.Pdf;
-using PdfSharp.Drawing;
-using System.Xml.Linq;
-using System.IO;
-using Npgsql;
+
 
 namespace Technoshop.Service
 
